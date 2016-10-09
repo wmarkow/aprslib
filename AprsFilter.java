@@ -23,23 +23,29 @@ package org.altusmetrum.aprslib_1;
 
 public class AprsFilter {
 
-	float[]	coeff;
-	int filter;
-	int window;
+	private float[]	coeff;
+	private int filter;
+	private int window;
 
 	/* center of the filter (in samples) */
-	float center;
+	private float center;
 
 	/* cycles per sample, which is frequency / samples per second */
-	float cps;
-	float cps_low;
-	float cps_high;
+	private float cps;
+	private float cps_low;
+	private float cps_high;
 
 	static public final int	filter_cos = 1;
 	static public final int	filter_sin = 2;
 	static public final int filter_lowpass = 3;
 	static public final int filter_bandpass = 4;
 	static public final int filter_highpass = 5;
+
+	static public final int window_cosine = 1;
+	static public final int window_hamming = 2;
+	static public final int window_blackman = 3;
+	static public final int window_flattop = 4;
+	static public final int window_truncated = 5;
 
 	static private final float pi = (float) Math.PI;
 
@@ -82,6 +88,42 @@ public class AprsFilter {
 		}
 	}
 
+	private float window (int type, int size, int j) throws IllegalArgumentException {
+		float center;
+		float w = 1.0f;
+
+		center = 0.5f * (size - 1);
+
+		switch (type) {
+		case window_cosine:
+			w = cosf((float) (j - center) / size * pi);
+			break;
+
+		case window_hamming:
+			w = 0.53836f - 0.46164f * cosf((j * 2 * pi) / (size - 1));
+			break;
+
+		case window_blackman:
+			w =  0.42659f - 0.49656f * cosf((j * 2 * pi) / (size - 1))
+				+ 0.076849f * cosf((j * 4 * pi) / (size - 1));
+			break;
+
+		case window_flattop:
+			w =  1.0f - 1.93f  * cosf((j * 2 * pi) / (size - 1))
+				  + 1.29f  * cosf((j * 4 * pi) / (size - 1))
+				  - 0.388f * cosf((j * 6 * pi) / (size - 1))
+				  + 0.028f * cosf((j * 8 * pi) / (size - 1));
+			break;
+
+		case window_truncated:
+			w = 1.0f;
+			break;
+		default:
+			throw new IllegalArgumentException(String.format("Unknown window %d", type));
+		}
+		return w;
+	}
+
 	private float normalize(int i, float coeff, float shape) {
 		switch (filter) {
 		case filter_cos:
@@ -93,7 +135,7 @@ public class AprsFilter {
 			return coeff * shape;
 		case filter_bandpass:
 			/* unity gain in middle of passband. */
-			return 2 * coeff * shape * AprsDsp.cos(2 * pi * cps * (i - center));
+			return 2 * coeff * shape * cosf(2 * pi * cps * (i - center));
 		default:
 			return 1.0f;
 		}
@@ -111,7 +153,7 @@ public class AprsFilter {
 		float norm = 0.0f;
 		for (int i = 0; i < size; i++) {
 			float c = coeff(i);
-			float s = AprsDsp.window(window, size, i);
+			float s = window(window, size, i);
 			float n = normalize(i, c, s);
 			coeff[i] = c * s;
 			norm += n;

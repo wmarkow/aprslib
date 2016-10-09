@@ -49,13 +49,6 @@ public class AprsTest {
 		return a | (b << 8);
 	}
 
-	static void dump_filter(AprsFilter f) {
-		float[]	c = f.coeff;
-
-		for (int i = 0; i < c.length; i++)
-			System.out.printf ("%d %g\n", i, c[i]);
-	}
-
 	static void shutdown(String reason) {
 		System.err.printf("failed: %s\n", reason);
 		System.exit(1);

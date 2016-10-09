@@ -18,7 +18,6 @@ aprslib_JAVA = \
 	AprsAgc.java \
 	AprsBit.java \
 	AprsData.java \
-	AprsDsp.java \
 	AprsDemod.java \
 	AprsFcs.java \
 	AprsHdlc.java \

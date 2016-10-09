@@ -122,35 +122,35 @@ public class AprsDemod {
 		int low_filter_size = round(low_filter_len_bits * sample_rate / baud_rate);
 
 		pre_filter = new AprsFilter(AprsFilter.filter_bandpass,
-					    AprsDsp.window_truncated,
+					    AprsFilter.window_truncated,
 					    pre_filter_size,
 					    sample_rate,
 					    Math.min(mark_freq, space_freq) - pre_filter_baud * baud_rate,
 					    Math.max(mark_freq, space_freq) + pre_filter_baud * baud_rate);
 
 		mark_cos_filter = new AprsFilter(AprsFilter.filter_cos,
-						 AprsDsp.window_cosine,
+						 AprsFilter.window_cosine,
 						 sample_filter_size,
 						 sample_rate,
 						 mark_freq);
 		mark_sin_filter = new AprsFilter(AprsFilter.filter_sin,
-						 AprsDsp.window_cosine,
+						 AprsFilter.window_cosine,
 						 sample_filter_size,
 						 sample_rate,
 						 mark_freq);
 		space_cos_filter = new AprsFilter(AprsFilter.filter_cos,
-						  AprsDsp.window_cosine,
+						  AprsFilter.window_cosine,
 						  sample_filter_size,
 						  sample_rate,
 						  space_freq);
 		space_sin_filter = new AprsFilter(AprsFilter.filter_sin,
-						  AprsDsp.window_cosine,
+						  AprsFilter.window_cosine,
 						  sample_filter_size,
 						  sample_rate,
 						  space_freq);
 
 		low_filter = new AprsFilter(AprsFilter.filter_lowpass,
-					    AprsDsp.window_truncated,
+					    AprsFilter.window_truncated,
 					    low_filter_size,
 					    sample_rate,
 					    1.16f * baud_rate);
