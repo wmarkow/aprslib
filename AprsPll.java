@@ -23,7 +23,7 @@ package org.altusmetrum.aprslib_1;
 
 public class AprsPll {
 
-	int	samples_per_second;
+	float	samples_per_second;
 	float	baud_rate;
 	float	clock;
 	float	step;
@@ -58,7 +58,7 @@ public class AprsPll {
 		}
 	}
 
-	public AprsPll(AprsBit receiver, int samples_per_second, float baud_rate) {
+	public AprsPll(AprsBit receiver, float samples_per_second, float baud_rate) {
 		this.receiver = receiver;
 		this.samples_per_second = samples_per_second;
 		this.baud_rate = baud_rate;

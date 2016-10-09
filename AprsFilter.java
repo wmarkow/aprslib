@@ -122,7 +122,7 @@ public class AprsFilter {
 			coeff[i] /= norm;
 	}
 
-	public AprsFilter(int filter, int window, int size, int samples_per_second, float freq) throws IllegalArgumentException {
+	public AprsFilter(int filter, int window, int size, float samples_per_second, float freq) throws IllegalArgumentException {
 
 		if (filter == filter_bandpass)
 			throw new IllegalArgumentException("one parameter filter cannot be bandpass");
@@ -132,7 +132,7 @@ public class AprsFilter {
 		build(filter, window, size);
 	}
 
-	public AprsFilter(int filter, int window, int size, int samples_per_second, float low, float high) throws IllegalArgumentException {
+	public AprsFilter(int filter, int window, int size, float samples_per_second, float low, float high) throws IllegalArgumentException {
 
 		if (filter != filter_bandpass)
 			throw new IllegalArgumentException("two parameter filter must be bandpass");

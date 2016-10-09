@@ -22,23 +22,14 @@
 package org.altusmetrum.aprslib_1;
 
 import java.io.*;
+import	javax.sound.sampled.*;
 
-class Receive implements AprsData {
+class packet implements AprsPacket {
+	public void receive(AprsAprs packet) {
+		System.out.printf("%s\n", packet.toString());
+	}
 
 	public void carrier_detect(boolean detect) {
-		System.out.printf("DCD %b\n", detect);
-	}
-
-	public void data(byte b) {
-		System.out.printf ("\tbyte %02x\n", b);
-	}
-
-	public void start() {
-		System.out.printf ("start...\n");
-	}
-
-	public void stop() {
-		System.out.printf("...stop\n");
 	}
 }
 
@@ -65,38 +56,128 @@ public class AprsTest {
 			System.out.printf ("%d %g\n", i, c[i]);
 	}
 
-	public static void main(final String[] args) {
-//		AprsData	data = new Receive();
-		AprsData	data = new AprsAX25();
-		AprsDemod	demod = new AprsDemod(data);
+	static void shutdown(String reason) {
+		System.err.printf("failed: %s\n", reason);
+		System.exit(1);
+	}
+
+	class Capture {
+		AudioInputStream	input_stream;
+		AudioFormat 		format;
+		AprsDemod		demod;
+
+		public void process(byte[] data, int length) {
+			for (int i = 0; i < length; i += 2) {
+				int	a = data[i] & 0xff;
+				int	b = data[i+1] & 0xff;
+				short	input = (short) (a | (b << 8));
+				float raw = input / 16384.0f;
+				demod.demod(raw);
+			}
+		}
+
+		public void capture () {
+
+			AudioFormat.Encoding	encoding = AudioFormat.Encoding.PCM_SIGNED;
+			float			sample_rate = 44100.0f;
+			int			sample_size = 16;
+			int			channels = 1;
+			int			frame_size = sample_size / 8 * channels;
+			boolean			big_endian = false;
+
+			format = new AudioFormat(encoding,
+						 sample_rate,
+						 sample_size,
+						 channels,
+						 frame_size,
+						 sample_rate,
+						 big_endian);
+
+			DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+
+			if (!AudioSystem.isLineSupported(info)) {
+				System.out.printf("can't get desired format\n");
+				System.exit(1);
+			}
+
+			TargetDataLine	line = null;
+
+			try {
+				line = (TargetDataLine) AudioSystem.getLine(info);
+				line.open(format, line.getBufferSize());
+			} catch (LineUnavailableException ex) {
+				shutdown("Line unavailable\n");
+			} catch (SecurityException ex) { 
+				shutdown(ex.toString());
+			} catch (Exception ex) { 
+				shutdown(ex.toString());
+			}
+
+			int frameSizeInBytes = format.getFrameSize();
+			int bufferLengthInFrames = line.getBufferSize() / 8;
+			int bufferLengthInBytes = bufferLengthInFrames * frameSizeInBytes;
+			byte[] data = new byte[bufferLengthInBytes];
+			int numBytesRead;
+
+			System.out.printf("frame bytes %d buffer frames %d buffer bytes %d\n",
+					  frameSizeInBytes, bufferLengthInFrames, bufferLengthInBytes);
+
+			line.start();
+
+			for (;;) {
+				if((numBytesRead = line.read(data, 0, bufferLengthInBytes)) == -1) {
+					break;
+				}
+				process(data, numBytesRead);
+			}
+		}
+
+		public Capture (AprsDemod demod) {
+			this.demod = demod;
+		}
+	}
+
+	public void run(final String[] args) {
+		AprsDemod	demod = new AprsDemod(new packet(), 44100);
 		boolean		any_read = false;
 
 		for (int i = 0; i < args.length; i++) {
-			try {
-				FileInputStream f = new FileInputStream(args[i]);
+			if (args[i].equals("capture")) {
+				Capture c = new Capture(demod);
+
+				c.capture();
+			} else {
 				try {
-					for (;;) {
-						int input = sample(f);
-						if (input == -1)
-							break;
-						if (input >= 32768)
-							input = input - 65536;
-						float raw = input / 16384.0f;
-						demod.demod(raw);
+					FileInputStream f = new FileInputStream(args[i]);
+					try {
+						for (;;) {
+							int input = sample(f);
+							if (input == -1)
+								break;
+							if (input >= 32768)
+								input = input - 65536;
+							float raw = input / 16384.0f;
+							demod.demod(raw);
+						}
+						any_read = true;
+					} catch (IOException ie) {
 					}
-					any_read = true;
-				} catch (IOException ie) {
+					try {
+						f.close();
+					} catch (IOException ie) {
+					}
+				} catch (FileNotFoundException fe) {
+					System.out.printf("No such file %s\n", args[i]);
 				}
-				try {
-					f.close();
-				} catch (IOException ie) {
-				}
-			} catch (FileNotFoundException fe) {
-				System.out.printf("No such file %s\n", args[i]);
 			}
 		}
 		if (any_read)
-			for (int e = 0; e < 1024; e++)
-				demod.demod(0.0f);
+			demod.flush();
+	}
+
+	public static void main(final String[] args) {
+		AprsTest	t = new AprsTest();
+
+		t.run(args);
 	}
 }

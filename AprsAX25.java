@@ -101,6 +101,8 @@ public class AprsAX25 implements AprsData {
 	int	frame_len;
 	int	num_addr;
 
+	AprsPacket	packet;
+
 	private final int frame(int i) {
 		return frame[i] & 0xff;
 	}
@@ -130,23 +132,20 @@ public class AprsAX25 implements AprsData {
 		return (frame(6 + n*7) & SSID_SSID_MASK) >> SSID_SSID_SHIFT;
 	}
 
-	String address(int n) {
+	AprsAddress address(int n) {
 		if (n < 0 || n >= num_addr)
-			return "??????";
+			return new AprsAddress("??????", 0);
 
 		StringBuilder s = new StringBuilder();
 		for (int i = 0; i < 6; i++) {
 			int ch = frame(n*7 + i) >> 1;
 			if (ch <= ' ') break;
+			if (ch > 'a')
+				System.out.printf("weird address %x\n", ch);
 			s.appendCodePoint(ch);
 		}
 
-		int ssid = ssid(n);
-		if (ssid != 0) {
-			s.append('-');
-			s.append(ssid);
-		}
-		return s.toString();
+		return new AprsAddress(s.toString(), ssid(n));
 	}
 
 	boolean repeated(int n) {
@@ -192,7 +191,6 @@ public class AprsAX25 implements AprsData {
 		}
 		return 0;
 	}
-
 
 	int info_offset() {
 		return control_offset() + num_control() + num_pid();
@@ -250,17 +248,17 @@ public class AprsAX25 implements AprsData {
 		if (num_addr < 2)
 			return info();
 
-		String	destination = address(0);
-		String	source = address(1);
+		AprsAddress	destination = address(0);
+		AprsAddress	source = address(1);
 
 		StringBuilder s = new StringBuilder();
 
-		s.append(source);
+		s.append(source.toString());
 		s.append('>');
-		s.append(destination);
+		s.append(destination.toString());
 		for (int i = 2; i < num_addr; i++) {
 			s.append(',');
-			s.append(address(i));
+			s.append(address(i).toString());
 		}
 		s.append(':');
 
@@ -272,7 +270,7 @@ public class AprsAX25 implements AprsData {
 	/* AprsData interface */
 
 	public void carrier_detect(boolean detect) {
-//		System.out.printf("DCD %b\n", detect);
+		packet.carrier_detect(detect);
 	}
 
 	public void data(byte b) {
@@ -301,10 +299,11 @@ public class AprsAX25 implements AprsData {
 		frame_len = total_len - 2;
 		num_addr = num_addr();
 
-		System.out.printf("%s\n", toString());
+		packet.receive(new AprsAprs(this));
 	}
 
-	public AprsAX25() {
+	public AprsAX25(AprsPacket packet) {
+		this.packet = packet;
 		frame = new byte[AX25_MAX_TOTAL_LEN];
 		total_len = 0;
 	}

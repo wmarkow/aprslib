@@ -12,6 +12,7 @@ SRC=.
 aprslibdir = $(datadir)/java
 
 aprslib_JAVA = \
+	AprsAddress.java \
 	AprsAprs.java \
 	AprsAX25.java \
 	AprsAgc.java \
@@ -22,6 +23,7 @@ aprslib_JAVA = \
 	AprsFcs.java \
 	AprsHdlc.java \
 	AprsFilter.java \
+	AprsPacket.java \
 	AprsPll.java \
 	AprsRing.java \
 	AprsTest.java
