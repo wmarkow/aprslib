@@ -45,6 +45,8 @@ public class AprsDemod {
 	static final float	pre_filter_baud = 0.23f;
 
 	AprsFilter	pre_filter;
+	AprsIir		pre_iir;
+
 	AprsFilter	mark_cos_filter;
 	AprsFilter	mark_sin_filter;
 	AprsFilter	space_cos_filter;
@@ -62,13 +64,18 @@ public class AprsDemod {
 		return (float) Math.hypot(a,b);
 	}
 
-	int count = 0;
-
-	boolean	expensive = true;
 	boolean prefilter = true;
+	boolean preiir = false;
+	boolean	expensive = true;
+	boolean lowfilter = true;
+
+	int		count = 0;
 
 	public void demod(float input) {
 
+		if (preiir) {
+			input = pre_iir.filter(input);
+		}
 		if (prefilter) {
 			pre_ring.put(input);
 			input = pre_filter.convolve(pre_ring);
@@ -76,27 +83,32 @@ public class AprsDemod {
 
 		input_ring.put(input);
 
-		float mark_raw, space_raw;
+		float mark, space;
 
 		if (expensive) {
-			mark_ring.put(z(mark_cos_filter.convolve(input_ring),
-					mark_sin_filter.convolve(input_ring)));
-			space_ring.put(z(space_cos_filter.convolve(input_ring),
-					 space_sin_filter.convolve(input_ring)));
-			mark_raw  = low_filter.convolve(mark_ring);
-			space_raw = low_filter.convolve(space_ring);
+			mark  = z(mark_cos_filter.convolve(input_ring),
+				  mark_sin_filter.convolve(input_ring));
+			space = z(space_cos_filter.convolve(input_ring),
+				  space_sin_filter.convolve(input_ring));
 		} else {
+			mark  = mark_g.filter(input_ring);
+			space = space_g.filter(input_ring);
+		}
 
-			mark_raw  = mark_g.filter(input_ring);
-			space_raw = space_g.filter(input_ring);
+		if (lowfilter) {
+			mark_ring.put(mark);
+			space_ring.put(space);
+
+			mark  = low_filter.convolve(mark_ring);
+			space = low_filter.convolve(space_ring);
 		}
 
 		/* AGC mark and space separately */
-		float mark_value = mark_agc.sample(mark_raw);
-		float space_value = space_agc.sample(space_raw);
+		mark  = mark_agc.sample(mark);
+		space = space_agc.sample(space);
 
 		/* see which is bigger */
-		float demod_out = mark_value - space_value;
+		float demod_out = mark - space;
 
 		int demod_val = demod_prev;
 
@@ -106,6 +118,7 @@ public class AprsDemod {
 		else if (demod_out < -hysteresis)
 			demod_val = 0;
 
+//		System.out.printf ("%d %f %f %d\n", ++count, mark, space, demod_val);
 		/* Pass along to the PLL to detect bits */
 		pll.receive(demod_val, hdlc.in_frame());
 	}
@@ -115,19 +128,33 @@ public class AprsDemod {
 	}
 
 	public void flush() {
-		int	len = (input_ring.data.length + 1) / 2;
+		int	flush = 0;
 
-		for (int i = 0; i < len; i++)
+		if (preiir)
+			flush += 64;	/* a stab */
+
+		if (prefilter)
+			flush += (pre_ring.data.length + 1) / 2;
+
+		flush += (input_ring.data.length + 1) / 2;
+
+		if (lowfilter)
+			flush += (mark_ring.data.length + 1) / 2;
+
+		for (int i = 0; i < flush; i++)
 			demod(0.0f);
 	}
 
-	public AprsDemod(AprsData data, float sample_rate, int len) {
+	public AprsDemod(AprsData data, float sample_rate, int sample_filter_len) {
 
+		if (preiir) {
+			pre_iir = new AprsIir(AprsIir.filter_lowpass);
+		}
 		if (prefilter) {
-			int	pre_filter_len = 128 * 3;
+			int	pre_filter_len = 64 * 3;
 
 			pre_filter = new AprsFilter(AprsFilter.filter_bandpass,
-						    AprsFilter.window_truncated,
+						    AprsFilter.window_kaiser,
 						    pre_filter_len,
 						    sample_rate,
 						    Math.min(mark_freq, space_freq) - pre_filter_baud * baud_rate,
@@ -137,8 +164,8 @@ public class AprsDemod {
 		}
 
 		if (expensive) {
-			int	sample_filter_len = 25 * 3;
-			int	low_filter_len = 21 * 3;
+			if (sample_filter_len == 0)
+				sample_filter_len = 25 * 3;
 
 			mark_cos_filter = new AprsFilter(AprsFilter.filter_cos,
 							 AprsFilter.window_cosine,
@@ -160,22 +187,27 @@ public class AprsDemod {
 							  sample_filter_len,
 							  sample_rate,
 							  space_freq);
+		} else {
+			if (sample_filter_len == 0)
+				sample_filter_len = 77;
+
+			mark_g = new AprsGoertzel(sample_rate, mark_freq, sample_filter_len);
+			space_g = new AprsGoertzel(sample_rate, space_freq, sample_filter_len);
+		}
+
+		input_ring = new AprsRing(sample_filter_len);
+
+		if (lowfilter) {
+			int	low_filter_len = 21 * 3;
 
 			low_filter = new AprsFilter(AprsFilter.filter_lowpass,
-						    AprsFilter.window_truncated,
+						    AprsFilter.window_kaiser,
 						    low_filter_len,
 						    sample_rate,
 						    1.16f * baud_rate);
 
-			input_ring = new AprsRing(sample_filter_len);
 			mark_ring = new AprsRing(low_filter_len);
 			space_ring = new AprsRing(low_filter_len);
-
-		} else {
-			mark_g = new AprsGoertzel(sample_rate, mark_freq, len);
-			space_g = new AprsGoertzel(sample_rate, space_freq, len);
-
-			input_ring = new AprsRing(len);
 		}
 
 		mark_agc = new AprsAgc(agc_attack, agc_decay);
@@ -190,6 +222,6 @@ public class AprsDemod {
 	}
 
 	public AprsDemod(AprsPacket packet, float sample_rate) {
-		this(packet, sample_rate, 75);
+		this(packet, sample_rate, 0);
 	}
 }

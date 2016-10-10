@@ -45,7 +45,8 @@ public class AprsFilter {
 	static public final int window_hamming = 2;
 	static public final int window_blackman = 3;
 	static public final int window_flattop = 4;
-	static public final int window_truncated = 5;
+	static public final int window_kaiser = 5;
+	static public final int window_truncated = 6;
 
 	static private final float pi = (float) Math.PI;
 
@@ -67,9 +68,36 @@ public class AprsFilter {
 	public float convolve(AprsRing ring) {
 		float	sum = 0.0f;
 
-		for (int i = 0; i < coeff.length; i++)
-			sum += ring.get(i) * coeff[i];
+		float[] data = ring.data;
+		int pos = ring.pos;
+		int part = coeff.length - pos;
+		int i;
+		for (i = 0; i < part; i++)
+			sum += data[pos+i] * coeff[i];
+		pos -= coeff.length;
+		for (; i < coeff.length; i++)
+			sum += data[pos+i] * coeff[i];
 		return sum;
+	}
+
+	public static double bessi0(double x) {
+		double ax,ans;
+		double y;
+
+		if ((ax=Math.abs(x)) < 3.75) {
+			y=x/3.75;
+			y*=y;
+			ans=1.0+y*(3.5156229+y*(3.0899424+y*(1.2067492
+				+y*(0.2659732+y*(0.360768e-1+y*0.45813e-2)))));
+		}
+		else {
+			y=3.75/ax;
+			ans=(Math.exp(ax)/Math.sqrt(ax))*(0.39894228+y*(0.1328592e-1
+				+y*(0.225319e-2+y*(-0.157565e-2+y*(0.916281e-2
+				+y*(-0.2057706e-1+y*(0.2635537e-1+y*(-0.1647633e-1
+				+y*0.392377e-2))))))));
+		}
+		return ans;
 	}
 
 	public int length() {
@@ -79,26 +107,66 @@ public class AprsFilter {
 	private float coeff(int i) throws IllegalArgumentException {
 		float	offset = i - center;
 
+		float v, check;
 		switch (filter) {
 		case filter_cos:
 			return cosf(offset * cps * 2 * pi);
 		case filter_sin:
 			return sinf(offset * cps * 2 * pi);
 		case filter_lowpass:
-			return 2.0f * cps * sinc(2.0f * cps * offset);
+			if (offset == 0.0f)
+				v = 2*cps;
+			else
+				v = sinf(2.0f * cps * pi * offset) / (pi * offset);
+			check = 2.0f * cps * sinc(2.0f * cps * offset);
+			return v;
 		case filter_highpass:
 			if (offset == 0)
 				return 1.0f;
 			return 2.0f * cps * (1 - sinc(2.0f * cps * offset));
 		case filter_bandpass:
-			return 2.0f * cps_high * sinc(2.0f * cps_high * offset) -
+			if (offset == 0.0f)
+				v = 2.0f * (cps_high - cps_low);
+			else
+				v = sinf(2 * pi * cps_high * offset) / (pi * offset) -
+					sinf(2 * pi * cps_low * offset) / (pi * offset);
+			check = 2.0f * cps_high * sinc(2.0f * cps_high * offset) -
 				2.0f * cps_low * sinc(2.0f * cps_low * offset);
+			if (Math.abs(v - check) > 1e-4)
+				System.out.printf("bad bandpass old %f new %f\n", v, check);
+			return v;
 		default:
 			throw new IllegalArgumentException(String.format("Unknown filter %d", filter));
 		}
 	}
 
-	private float window (int type, int size, int j) throws IllegalArgumentException {
+	static private float kaiser(int size, int j, float samples_per_second) {
+		/* XXX need to have these passed in */
+		float ripple = 0.0005f;
+		float transition_width = 20.0f;
+		float a = -20.0f * (float) Math.log(ripple);
+		float tw = 2.0f * pi * transition_width / samples_per_second;
+		float m;
+
+		if (a <= 21.0f)
+			m = (float) Math.ceil(5.79 / tw);
+		else
+			m = (float) Math.ceil((a - 7.95f) / (2.285f * tw));
+
+		float beta;
+
+		if (a <= 21.0f)
+			beta = 0.0f;
+		else if (a <= 50.0f)
+			beta = 0.5842f * (float) Math.pow(a - 21.0f, 0.4f) - 0.07886f * (a - 21.0f);
+		else
+			beta = 0.1102f * (a - 8.7f);
+
+		float w = (float) (bessi0(beta * Math.sqrt(1 - ((2 * size / m - 1) * (2 * size / m - 1)))) / bessi0(beta));
+		return w;
+	}
+
+	static float window (int type, int size, int j, float samples_per_second) throws IllegalArgumentException {
 		float center;
 		float w = 1.0f;
 
@@ -127,6 +195,10 @@ public class AprsFilter {
 
 		case window_truncated:
 			w = 1.0f;
+			break;
+
+		case window_kaiser:
+			w = kaiser(size, j, samples_per_second);
 			break;
 		default:
 			throw new IllegalArgumentException(String.format("Unknown window %d", type));
@@ -164,10 +236,10 @@ public class AprsFilter {
 		float norm = 0.0f;
 		for (int i = 0; i < size; i++) {
 			float c = coeff(i);
-			float s = window(window, size, i);
+			float s = window(window, size, i, samples_per_second);
 			float n = normalize(i, c, s);
 			coeff[i] = c * s;
-			norm += coeff[i];
+			norm += n;
 		}
 
 		/* normalize to adjust gain */
@@ -175,7 +247,10 @@ public class AprsFilter {
 			coeff[i] /= norm;
 	}
 
+	float	samples_per_second;
+
 	public AprsFilter(int filter, int window, int size, float samples_per_second, float freq) throws IllegalArgumentException {
+		this.samples_per_second = samples_per_second;
 
 		if (filter == filter_bandpass)
 			throw new IllegalArgumentException("one parameter filter cannot be bandpass");
@@ -186,6 +261,7 @@ public class AprsFilter {
 	}
 
 	public AprsFilter(int filter, int window, int size, float samples_per_second, float low, float high) throws IllegalArgumentException {
+		this.samples_per_second = samples_per_second;
 
 		if (filter != filter_bandpass)
 			throw new IllegalArgumentException("two parameter filter must be bandpass");

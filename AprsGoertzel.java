@@ -38,48 +38,7 @@ public class AprsGoertzel {
 
 	float[]	window;
 
-	static public final int window_cosine = 1;
-	static public final int window_hamming = 2;
-	static public final int window_blackman = 3;
-	static public final int window_flattop = 4;
-	static public final int window_truncated = 5;
-
-	private float window (int type, int size, int j) {
-		float center;
-		float w = 1.0f;
-
-		center = 0.5f * (size - 1);
-
-		switch (type) {
-		case window_cosine:
-			w = cosf((float) (j - center) / size * pi);
-			break;
-
-		case window_hamming:
-			w = 0.53836f - 0.46164f * cosf((j * 2 * pi) / (size - 1));
-			break;
-
-		case window_blackman:
-			w =  0.42659f - 0.49656f * cosf((j * 2 * pi) / (size - 1))
-				+ 0.076849f * cosf((j * 4 * pi) / (size - 1));
-			break;
-
-		case window_flattop:
-			w =  1.0f - 1.93f  * cosf((j * 2 * pi) / (size - 1))
-				  + 1.29f  * cosf((j * 4 * pi) / (size - 1))
-				  - 0.388f * cosf((j * 6 * pi) / (size - 1))
-				  + 0.028f * cosf((j * 8 * pi) / (size - 1));
-			break;
-
-		case window_truncated:
-		default:
-			w = 1.0f;
-			break;
-		}
-		return w;
-	}
-
-	int window_type = window_hamming;
+	int window_type = AprsFilter.window_hamming;
 
 	public float filter(AprsRing ring) {
 
@@ -94,14 +53,14 @@ public class AprsGoertzel {
 			q2 = q1;
 			q1 = q0;
 		}
-		return q1 * q1 + q2 * q2 - q1 * q2 * coeff;
+		return (float) Math.sqrt (q1 * q1 + q2 * q2 - q1 * q2 * coeff);
 	}
 
 	public AprsGoertzel (float sample_rate, float frequency, int length) {
 
 		window = new float[length];
 		for (int i = 0; i < length; i++)
-			window[i] = window(window_type, length, i);
+			window[i] = AprsFilter.window(window_type, length, i, sample_rate);
 
 		this.length = length;
 
