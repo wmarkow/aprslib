@@ -25,16 +25,17 @@ import java.io.*;
 import java.util.*;
 import javax.sound.sampled.*;
 
-class packet implements AprsPacket {
-	public void receive(AprsAprs packet) {
-		System.out.printf("%s\n", packet.toString());
-	}
-
-	public void carrier_detect(boolean detect) {
-	}
-}
-
 public class AprsTest {
+
+	class packet implements AprsPacket {
+		public void receive(AprsAprs packet) {
+//			System.out.printf("baud %7.2f clock %5.2f ", demod.baud_rate(), demod.pll.pll_off());
+			System.out.printf("%s\n", packet.toString());
+		}
+
+		public void carrier_detect(boolean detect) {
+		}
+	}
 
 	public AprsTest() {
 	}
@@ -142,7 +143,7 @@ public class AprsTest {
 		AprsRing	ring = new AprsRing(filter.length());
 		Random		r = new Random();
 		System.out.printf("v r f\n");
-		for (int i = 0; i < 10000; i++) {
+		for (int i = 0; i < 100000; i++) {
 			float v = r.nextFloat() - 0.5f;
 			ring.put(v);
 			System.out.printf ("%d %f %f\n", i, v, filter.convolve(ring));
@@ -158,13 +159,16 @@ public class AprsTest {
 		}
 	}
 
+	AprsDemod	demod;
+
 	public void run(final String[] args) {
 		packet		p = new packet();
-		AprsDemod	demod = new AprsDemod(p, 44100);
 		boolean		any_read = false;
 
+		demod = new AprsDemod(p, 44100);
+
 //		test_iir(new AprsIir());
-//		test_filter(demod.pre_filter);
+//		test_filter(demod.low_filter);
 //		System.exit(0);
 
 		for (int i = 0; i < args.length; i++) {
