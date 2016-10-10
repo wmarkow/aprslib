@@ -26,18 +26,36 @@ public class AprsPll {
 	float	samples_per_second;
 	float	baud_rate;
 	float	clock;
-	float	step;
+	float	step_searching;
+	float	step_locked;
+	float	step_inertia;
 	int	samples;
 	int	prev_bit;
 
 	AprsBit	receiver;
 
-	static final float	locked_inertia = 0.73f / 1000;
-	static final float	searching_inertia = 0.64f / 1000;
+	static final float	locked_inertia = 0.73f;
+	static final float	searching_inertia = 0.64f;
+
+	public float baud_rate() {
+		return step_locked * samples_per_second;
+	}
+
+	float	last_locked_bit_clock;
+
+	public float pll_off() {
+		return last_locked_bit_clock;
+	}
 
 	public void receive(int bit, boolean locked) {
 		++samples;
-		clock += step;
+
+		if (locked)
+			clock += step_locked;
+		else {
+			clock += step_searching;
+			step_locked = step_searching;
+		}
 
 		if (clock >= 0.5f) {
 			clock -= 1.0f;
@@ -53,8 +71,12 @@ public class AprsPll {
 			else
 				inertia = searching_inertia;
 
+			if (locked)
+				last_locked_bit_clock = clock;
+
+			if (locked)
+				step_locked -= clock * step_inertia;
 			clock = clock * inertia;
-			samples = 0;
 		}
 	}
 
@@ -63,7 +85,9 @@ public class AprsPll {
 		this.samples_per_second = samples_per_second;
 		this.baud_rate = baud_rate;
 
-		step = baud_rate / samples_per_second;
+		step_searching = baud_rate / samples_per_second;
+		step_locked = step_searching;
+		step_inertia = (1.0f - locked_inertia) / 100 * step_searching;
 		clock = 0.0f;
 		samples = 0;
 		prev_bit = 0;

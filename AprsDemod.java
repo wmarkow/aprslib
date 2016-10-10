@@ -107,7 +107,11 @@ public class AprsDemod {
 			demod_val = 0;
 
 		/* Pass along to the PLL to detect bits */
-		pll.receive(demod_val, false);
+		pll.receive(demod_val, hdlc.in_frame());
+	}
+
+	public float baud_rate() {
+		return pll.baud_rate();
 	}
 
 	public void flush() {

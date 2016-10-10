@@ -92,6 +92,10 @@ public class AprsHdlc implements AprsBit {
 		}
 	}
 
+	public boolean in_frame() {
+		return octet_len >= 0;
+	}
+
 	public AprsHdlc(AprsData data) {
 		this.data = data;
 
