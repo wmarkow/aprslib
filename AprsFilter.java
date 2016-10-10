@@ -23,7 +23,7 @@ package org.altusmetrum.aprslib_1;
 
 public class AprsFilter {
 
-	private float[]	coeff;
+	float[]	coeff;
 	private int filter;
 	private int window;
 
@@ -49,12 +49,19 @@ public class AprsFilter {
 
 	static private final float pi = (float) Math.PI;
 
-	private float sinf(float f) {
+	static final private float sinf(float f) {
 		return (float) Math.sin(f);
 	}
 
-	private float cosf(float f) {
+	static final private float cosf(float f) {
 		return (float) Math.cos(f);
+	}
+
+	static final private float sinc(float f) {
+		if (f == 0.0f)
+			return 1.0f;
+		float x = pi * f;
+		return sinf(x) / x;
 	}
 
 	public float convolve(AprsRing ring) {
@@ -63,6 +70,10 @@ public class AprsFilter {
 		for (int i = 0; i < coeff.length; i++)
 			sum += ring.get(i) * coeff[i];
 		return sum;
+	}
+
+	public int length() {
+		return coeff.length;
 	}
 
 	private float coeff(int i) throws IllegalArgumentException {
@@ -74,15 +85,14 @@ public class AprsFilter {
 		case filter_sin:
 			return sinf(offset * cps * 2 * pi);
 		case filter_lowpass:
-			if (offset == 0.0f)
-				return 2 * cps;
-			return sinf(2.0f * pi * cps * offset) / (pi * offset);
+			return 2.0f * cps * sinc(2.0f * cps * offset);
+		case filter_highpass:
+			if (offset == 0)
+				return 1.0f;
+			return 2.0f * cps * (1 - sinc(2.0f * cps * offset));
 		case filter_bandpass:
-			if (offset == 0.0f)
-				return 2.0f * (cps_high - cps_low);
-			else
-				return sinf(2 * pi * cps_high * offset) / (pi * offset) -
-					sinf(2 * pi * cps_low * offset) / (pi * offset);
+			return 2.0f * cps_high * sinc(2.0f * cps_high * offset) -
+				2.0f * cps_low * sinc(2.0f * cps_low * offset);
 		default:
 			throw new IllegalArgumentException(String.format("Unknown filter %d", filter));
 		}
@@ -131,6 +141,7 @@ public class AprsFilter {
 			/* unity gain at target freq */
 			return coeff * coeff * shape;
 		case filter_lowpass:
+		case filter_highpass:
 			/* unity gain at DC */
 			return coeff * shape;
 		case filter_bandpass:
@@ -156,7 +167,7 @@ public class AprsFilter {
 			float s = window(window, size, i);
 			float n = normalize(i, c, s);
 			coeff[i] = c * s;
-			norm += n;
+			norm += coeff[i];
 		}
 
 		/* normalize to adjust gain */

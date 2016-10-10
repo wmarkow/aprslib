@@ -20,8 +20,10 @@ aprslib_JAVA = \
 	AprsData.java \
 	AprsDemod.java \
 	AprsFcs.java \
-	AprsHdlc.java \
 	AprsFilter.java \
+	AprsGoertzel.java \
+	AprsHdlc.java \
+	AprsIir.java \
 	AprsPacket.java \
 	AprsPll.java \
 	AprsRing.java \

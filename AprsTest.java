@@ -22,7 +22,8 @@
 package org.altusmetrum.aprslib_1;
 
 import java.io.*;
-import	javax.sound.sampled.*;
+import java.util.*;
+import javax.sound.sampled.*;
 
 class packet implements AprsPacket {
 	public void receive(AprsAprs packet) {
@@ -47,6 +48,13 @@ public class AprsTest {
 			return -1;
 
 		return a | (b << 8);
+	}
+
+	static void dump_filter(AprsFilter f) {
+		float[]	c = f.coeff;
+
+		for (int i = 0; i < c.length; i++)
+			System.out.printf ("%d %g\n", i, c[i]);
 	}
 
 	static void shutdown(String reason) {
@@ -130,12 +138,39 @@ public class AprsTest {
 		}
 	}
 
+	public void test_filter(AprsFilter filter) {
+		AprsRing	ring = new AprsRing(filter.length());
+		Random		r = new Random();
+		System.out.printf("v r f\n");
+		for (int i = 0; i < 10000; i++) {
+			float v = r.nextFloat() - 0.5f;
+			ring.put(v);
+			System.out.printf ("%d %f %f\n", i, v, filter.convolve(ring));
+		}
+	}
+
+	public void test_iir(AprsIir filter) {
+		Random		r = new Random();
+		System.out.printf("v r f\n");
+		for (int i = 0; i < 10000; i++) {
+			float v = r.nextFloat() - 0.5f;
+			System.out.printf ("%d %f %f\n", i, v, filter.filter(v));
+		}
+	}
+
 	public void run(final String[] args) {
-		AprsDemod	demod = new AprsDemod(new packet(), 44100);
+		packet		p = new packet();
+		AprsDemod	demod = new AprsDemod(p, 44100);
 		boolean		any_read = false;
 
+//		test_iir(new AprsIir());
+//		test_filter(demod.pre_filter);
+//		System.exit(0);
+
 		for (int i = 0; i < args.length; i++) {
-			if (args[i].equals("capture")) {
+			if (Character.isDigit(args[i].charAt(0))) {
+				demod = new AprsDemod(p, 44100, Integer.parseInt(args[i]));
+			} else if (args[i].equals("capture")) {
 				Capture c = new Capture(demod);
 
 				c.capture();
@@ -147,9 +182,7 @@ public class AprsTest {
 							int input = sample(f);
 							if (input == -1)
 								break;
-							if (input >= 32768)
-								input = input - 65536;
-							float raw = input / 16384.0f;
+							float raw = (short) input / 16384.0f;
 							demod.demod(raw);
 						}
 						any_read = true;
