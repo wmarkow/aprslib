@@ -58,7 +58,7 @@ public class AprsIir {
 
 	biquad[]	biquads;
 
-	static final float[]	coeff = {
+	static final float[]	band_coeff = {
 		/* Scaled for floating point */
 		0.5467085797931144f, -1.0934171595862288f, 0.5467085797931144f, 1.8995374900575972f, -0.9314401473000165f,	// b0, b1, b2, a1, a2
 		0.5f, -1f, 0.5f, 1.9595060786696943f, -0.9791438846133993f,							// b0, b1, b2, a1, a2
@@ -66,16 +66,37 @@ public class AprsIir {
 		0.0078125f, 0.015625f, 0.0078125f, 1.8352188343679972f, -0.9504662614217543f					// b0, b1, b2, a1, a2
 	};
 
+	static final float[]	lp_coeff = {
+		0.026736387616333877f, 0.05347277523266775f, 0.026736387616333877f, 1.502704181197029f, -0.5830614019773526f,// b0, b1, b2, a1, a2
+		0.03125f, 0.0625f, 0.03125f, 1.639887396470299f, -0.8070827730925009f// b0, b1, b2, a1, a2
+	};
+
 	float filter(float a) {
-		for (int i = 0; i < 4; i++)
+		for (int i = 0; i < biquads.length; i++)
 			a = biquads[i].filter(a);
 		return a;
 	}
 
-	AprsIir() {
-		biquads = new biquad[4];
+	static final int	filter_bandpass = 1;
+	static final int	filter_lowpass = 2;
 
-		for (int i = 0; i < 4; i++) {
+	AprsIir(int type) {
+		float[]	coeff;
+
+		switch (type) {
+		case filter_bandpass:
+		default:
+			coeff = band_coeff;
+			break;
+		case filter_lowpass:
+			coeff = lp_coeff;
+			break;
+		}
+
+		int	nb = coeff.length / 5;
+
+		biquads = new biquad[nb];
+		for (int i = 0; i < nb; i++) {
 			int	o = i * 5;
 			biquads[i] = new biquad(coeff[o+0],
 						coeff[o+1],
@@ -83,5 +104,9 @@ public class AprsIir {
 						coeff[o+3],
 						coeff[o+4]);
 		}
+	}
+
+	AprsIir() {
+		this(filter_bandpass);
 	}
 }
