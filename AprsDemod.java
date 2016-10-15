@@ -34,48 +34,82 @@ public class AprsDemod {
 
 	static final float	hysteresis = 0.01f;
 
+	static final float	pre_filter_baud = 0.23f;
+
+	/*
+	 * Demodulation options. All of these improve the demodulation
+	 * accuracy while increasing the cost of the computation.
+	 */
+
+	boolean prefilter;		/* Enable bandpass prefilter */
+	boolean	convolution;		/* Select convolution detector instead of Goertzel */
+	boolean lowfilter;		/* Enable lowpass postfilter */
+
+	static final boolean default_prefilter = true;
+	static final boolean default_convolution = false;
+	static final boolean default_lowfilter = true;
+
+	/* Bandpass prefilter. This can use more samples
+	 * than the detectors and hence filter out noise
+	 * better
+	 */
+	AprsFilter	pre_filter;
+	AprsRing	pre_ring;
+
+	/* Input samples to the detectors */
 	AprsRing	input_ring;
 
+	/* Goertzel detectors which operate as a single-bin FFT */
 	AprsGoertzel	mark_g;
 	AprsGoertzel	space_g;
 
-	AprsAgc		mark_agc;
-	AprsAgc		space_agc;
-
-	static final float	pre_filter_baud = 0.23f;
-
-	AprsFilter	pre_filter;
-	AprsIir		pre_iir;
-
+	/*
+	 * Convolution detectors, each of which is a pair of sin waves
+	 * 90° out of phase.
+	 */
 	AprsFilter	mark_cos_filter;
 	AprsFilter	mark_sin_filter;
 	AprsFilter	space_cos_filter;
 	AprsFilter	space_sin_filter;
+
+	/* Low pass postfilter to smooth out the detector results */
 	AprsFilter	low_filter;
+	AprsRing	mark_ring, space_ring;
 
-	AprsRing	pre_ring, mark_ring, space_ring;
+	/* Automatic gain control, one for each band to compensate for
+	 * different audio paths
+	 */
+	AprsAgc		mark_agc;
+	AprsAgc		space_agc;
 
+	/*
+	 * PLL used to track the clock by slowly skewing the baud rate
+	 * and phase by watching for zero crossings of the detector
+	 */
 	AprsPll		pll;
+
+	/*
+	 * The output of the PLL feeds into the packet decoder
+	 */
 	AprsHdlc	hdlc;
 
+	/*
+	 * Apply a bit of hysteresis to the decoded bits to reduce
+	 * noise at zero crossings of the detector
+	 */
 	int		demod_prev = 0;
 
 	private float z(float a, float b) {
 		return (float) Math.hypot(a,b);
 	}
 
-	boolean prefilter = true;
-	boolean preiir = false;
-	boolean	expensive = true;
-	boolean lowfilter = true;
-
-	int		count = 0;
+//	int		count = 0;
 
 	public void demod(float input) {
 
-		if (preiir) {
-			input = pre_iir.filter(input);
-		}
+		/* Prefilter with a bandpass to reduce noise outside of the
+		 * audio range
+		 */
 		if (prefilter) {
 			pre_ring.put(input);
 			input = pre_filter.convolve(pre_ring);
@@ -85,7 +119,7 @@ public class AprsDemod {
 
 		float mark, space;
 
-		if (expensive) {
+		if (convolution) {
 			mark  = z(mark_cos_filter.convolve(input_ring),
 				  mark_sin_filter.convolve(input_ring));
 			space = z(space_cos_filter.convolve(input_ring),
@@ -130,9 +164,6 @@ public class AprsDemod {
 	public void flush() {
 		int	flush = 0;
 
-		if (preiir)
-			flush += 64;	/* a stab */
-
 		if (prefilter)
 			flush += (pre_ring.data.length + 1) / 2;
 
@@ -145,27 +176,29 @@ public class AprsDemod {
 			demod(0.0f);
 	}
 
-	public AprsDemod(AprsData data, float sample_rate, int sample_filter_len) {
+	public AprsDemod(AprsData data, float sample_rate, boolean prefilter, boolean convolution, boolean lowfilter) {
+		this.prefilter = prefilter;
+		this.convolution = convolution;
+		this.lowfilter = lowfilter;
 
-		if (preiir) {
-			pre_iir = new AprsIir(AprsIir.filter_lowpass);
-		}
+		int	sample_filter_len;
+
 		if (prefilter) {
+			float	half_band = baud_rate * pre_filter_baud;
 			int	pre_filter_len = 64 * 3;
 
 			pre_filter = new AprsFilter(AprsFilter.filter_bandpass,
 						    AprsFilter.window_kaiser,
 						    pre_filter_len,
 						    sample_rate,
-						    Math.min(mark_freq, space_freq) - pre_filter_baud * baud_rate,
-						    Math.max(mark_freq, space_freq) + pre_filter_baud * baud_rate);
+						    Math.min(mark_freq, space_freq) - half_band,
+						    Math.max(mark_freq, space_freq) + half_band);
 
-			pre_ring = new AprsRing(pre_filter_len);
+			pre_ring = new AprsRing(pre_filter.length());
 		}
 
-		if (expensive) {
-			if (sample_filter_len == 0)
-				sample_filter_len = 25 * 3;
+		if (convolution) {
+			sample_filter_len = 25 * 3;
 
 			mark_cos_filter = new AprsFilter(AprsFilter.filter_cos,
 							 AprsFilter.window_cosine,
@@ -188,8 +221,7 @@ public class AprsDemod {
 							  sample_rate,
 							  space_freq);
 		} else {
-			if (sample_filter_len == 0)
-				sample_filter_len = 77;
+			sample_filter_len = 77;
 
 			mark_g = new AprsGoertzel(sample_rate, mark_freq, sample_filter_len);
 			space_g = new AprsGoertzel(sample_rate, space_freq, sample_filter_len);
@@ -217,11 +249,15 @@ public class AprsDemod {
 		pll = new AprsPll(hdlc, sample_rate, baud_rate);
 	}
 
-	public AprsDemod(AprsPacket packet, float sample_rate, int len) {
-		this(new AprsAX25(packet), sample_rate, len);
+	public AprsDemod(AprsData data, float sample_rate) {
+		this(data, sample_rate, default_prefilter, default_convolution, default_lowfilter);
+	}
+
+	public AprsDemod(AprsPacket packet, float sample_rate, boolean prefilter, boolean convolution, boolean lowfilter) {
+		this(new AprsAX25(packet), sample_rate, prefilter, convolution, lowfilter);
 	}
 
 	public AprsDemod(AprsPacket packet, float sample_rate) {
-		this(packet, sample_rate, 0);
+		this(new AprsAX25(packet), sample_rate);
 	}
 }

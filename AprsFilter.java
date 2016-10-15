@@ -24,8 +24,6 @@ package org.altusmetrum.aprslib_1;
 public class AprsFilter {
 
 	float[]	coeff;
-	private int filter;
-	private int window;
 
 	/* center of the filter (in samples) */
 	private float center;
@@ -63,6 +61,31 @@ public class AprsFilter {
 			return 1.0f;
 		float x = pi * f;
 		return sinf(x) / x;
+	}
+
+	/* Non-circular convolution, pad with zero
+	 *
+	 * offset: the position in 'other' which lines up
+	 * with coeff[0]. Can be negative, or larger than other
+	 */
+	private float convolve(float[] other, int offset) {
+		int	other_len = other.length;
+		int	start, end;
+
+		if (offset < 0) {
+			start = -offset;
+			end = start + other_len;
+		} else {
+			start = 0;
+			end = other_len - offset;
+		}
+		if (end > coeff.length)
+			end = coeff.length;
+
+		float	sum = 0.0f;
+		for (int i = start; i < end; i++)
+			sum += other[offset+i] * coeff[i];
+		return sum;
 	}
 
 	public float convolve(AprsRing ring) {
@@ -104,7 +127,7 @@ public class AprsFilter {
 		return coeff.length;
 	}
 
-	private float coeff(int i) throws IllegalArgumentException {
+	private float coeff(int filter, int i) throws IllegalArgumentException {
 		float	offset = i - center;
 
 		float v, check;
@@ -206,62 +229,83 @@ public class AprsFilter {
 		return w;
 	}
 
-	private float normalize(int i, float coeff, float shape) {
-		switch (filter) {
-		case filter_cos:
-		case filter_sin:
-			/* unity gain at target freq */
-			return coeff * coeff * shape;
-		case filter_lowpass:
-		case filter_highpass:
-			/* unity gain at DC */
-			return coeff * shape;
-		case filter_bandpass:
-			/* unity gain in middle of passband. */
-			return 2 * coeff * shape * cosf(2 * pi * cps * (i - center));
-		default:
-			return 1.0f;
+	private void init(int size) {
+		this.center = 0.5f * (size - 1);
+		this.coeff = new float[size];
+	}
+
+	private void normalize() {
+		float norm = 0.0f;
+		for (int i = 0; i < coeff.length; i++) {
+			float c = coeff[i];
+			norm += c * c;
 		}
+		norm = 1.0f / (float) Math.sqrt(norm);
+		for (int i = 0; i < coeff.length; i++)
+			coeff[i] *= norm;
 	}
 
 	/* Construct the filter by combining the impulse response values and the window.
-	 * Then normalize to unity gain at the appropriate frequency
+	 * Then normalize to unity gain.
 	 */
-	private void build(int filter, int window, int size) throws IllegalArgumentException {
-		this.filter = filter;
-		this.window = window;
-		this.center = 0.5f * (size - 1);
-		this.coeff = new float[size];
+	private void build(int filter, int window, int size, float samples_per_second) throws IllegalArgumentException {
+		init(size);
 
-		float norm = 0.0f;
 		for (int i = 0; i < size; i++) {
-			float c = coeff(i);
+			float c = coeff(filter, i);
 			float s = window(window, size, i, samples_per_second);
-			float n = normalize(i, c, s);
 			coeff[i] = c * s;
-			norm += n;
 		}
-
-		/* normalize to adjust gain */
-		for (int i = 0; i < size; i++)
-			coeff[i] /= norm;
+		normalize();
 	}
 
-	float	samples_per_second;
+	public AprsFilter convolve(AprsFilter other) {
+		int size = length() + other.length () * 2;
+		AprsFilter c = new AprsFilter(size);
+
+		for (int i = 0; i < size; i++) {
+			int	offset = i - other.length();
+			c.coeff[i] = convolve(other.coeff, offset);
+		}
+		c.normalize();
+		return c;
+	}
+
+	private float get(int pos) {
+		if (pos < 0)
+			return 0.0f;
+		if (pos >= length())
+			return 0.0f;
+		return coeff[pos];
+	}
+
+	public AprsFilter add(AprsFilter other) {
+		AprsFilter c = new AprsFilter(Math.max (length(), other.length()));
+
+		int	off_this = (c.length() - length()) / 2;
+		int	off_other = (c.length () - other.length()) / 2;
+
+		for (int i = 0; i < c.length(); i++)
+			c.coeff[i] = coeff[i - off_this] + other.coeff[i - off_other];
+		c.normalize();
+		return c;
+	}
+
+	private AprsFilter(int size) {
+		init(size);
+	}
 
 	public AprsFilter(int filter, int window, int size, float samples_per_second, float freq) throws IllegalArgumentException {
-		this.samples_per_second = samples_per_second;
 
 		if (filter == filter_bandpass)
 			throw new IllegalArgumentException("one parameter filter cannot be bandpass");
 
 		cps = freq / samples_per_second;
 
-		build(filter, window, size);
+		build(filter, window, size, samples_per_second);
 	}
 
 	public AprsFilter(int filter, int window, int size, float samples_per_second, float low, float high) throws IllegalArgumentException {
-		this.samples_per_second = samples_per_second;
 
 		if (filter != filter_bandpass)
 			throw new IllegalArgumentException("two parameter filter must be bandpass");
@@ -271,6 +315,6 @@ public class AprsFilter {
 		/* middle of passband */
 		cps = (cps_low + cps_high) / 2.0f;
 
-		build(filter, window, size);
+		build(filter, window, size, samples_per_second);
 	}
 }

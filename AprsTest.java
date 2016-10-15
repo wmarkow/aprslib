@@ -139,11 +139,12 @@ public class AprsTest {
 		}
 	}
 
-	public void test_filter(AprsFilter filter) {
+	public void test_filter(AprsFilter filter, int samples) {
 		AprsRing	ring = new AprsRing(filter.length());
 		Random		r = new Random();
+
 		System.out.printf("v r f\n");
-		for (int i = 0; i < 100000; i++) {
+		for (int i = 0; i < samples; i++) {
 			float v = r.nextFloat() - 0.5f;
 			ring.put(v);
 			System.out.printf ("%d %f %f\n", i, v, filter.convolve(ring));
@@ -168,13 +169,11 @@ public class AprsTest {
 		demod = new AprsDemod(p, 44100);
 
 //		test_iir(new AprsIir());
-//		test_filter(demod.low_filter);
+//		test_filter(demod.pre_filter, 30000);
 //		System.exit(0);
 
 		for (int i = 0; i < args.length; i++) {
-			if (Character.isDigit(args[i].charAt(0))) {
-				demod = new AprsDemod(p, 44100, Integer.parseInt(args[i]));
-			} else if (args[i].equals("capture")) {
+			if (args[i].equals("capture")) {
 				Capture c = new Capture(demod);
 
 				c.capture();
