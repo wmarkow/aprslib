@@ -386,7 +386,6 @@ public class AprsAprs {
 
 	static public final int	UNKNOWN = 0x7fffffff;
 
-	public String		info;
 	public AprsAddress	source;
 	public AprsAddress	destination;
 	public String		message_type;
@@ -478,7 +477,7 @@ public class AprsAprs {
 		return mbar * 0.0295333727;
 	}
 
-	private void ultimeter(AprsAX25 ax25, String info) {
+	private void ultimeter(String info) {
 
 		int	wind_peak = UNKNOWN;
 		int	wind_dir = UNKNOWN;
@@ -690,7 +689,7 @@ public class AprsAprs {
 		}
 	}
 
-	private void raw_nmea(AprsAX25 ax25, String info) {
+	private void raw_nmea(String info) {
 		message_type = info.split("[\\$,]")[1];
 		if (info.startsWith("$GPRMC"))
 			gprmc(info);
@@ -789,7 +788,7 @@ public class AprsAprs {
 	/*
 	 * Regular lat/lon position data packet
 	 */
-	private void ll_pos(AprsAX25 ax25, String info) {
+	private void ll_pos(String info) {
 		message_type = "Position";
 
 		if (Character.isDigit(info.charAt(1))) {
@@ -809,7 +808,7 @@ public class AprsAprs {
 	/*
 	 * Lat/lon position with time
 	 */
-	private void ll_pos_time(AprsAX25 ax25, String info) {
+	private void ll_pos_time(String info) {
 		message_type = "Position with time";
 		if (Character.isDigit(info.charAt(1))) {
 			decode_position_time(info);
@@ -829,11 +828,11 @@ public class AprsAprs {
 	 * The crazy mic_e format, which overloads the destination
 	 * callsign with position information. Its very short at least?
 	 */
-	private void mic_e(AprsAX25 ax25, String info) {
+	private void mic_e(String info) {
 		message_type = "MIC_E";
 
 		mic_e m = new mic_e(info);
-		String dest = ax25.address(AprsAX25.AX25_DESTINATION).callsign;
+		String dest = destination.callsign;
 
 		latitude = (m.digit(dest.charAt(0), 4) * 10 +
 			    m.digit(dest.charAt(1), 2) +
@@ -905,27 +904,27 @@ public class AprsAprs {
 	/*
 	 * Parse a pile of other messages. Meh
 	 */
-	private void station_cap(AprsAX25 ax25, String info) {
+	private void station_cap(String info) {
 		message_type = "Station Capabilities";
 		comment = info.substring(1);
 	}
 
-	private void status(AprsAX25 ax25, String info) {
+	private void status(String info) {
 		message_type = "Status Report";
 		comment = info.substring(1);
 	}
 
-	private void weather(AprsAX25 ax25, String info) {
+	private void weather(String info) {
 		message_type = "Weather";
 		comment = info.substring(1);
 	}
 
-	private void third_party(AprsAX25 ax25, String info) {
+	private void third_party(String info) {
 		message_type = "Third Party";
 		comment = info.substring(1);
 	}
 
-	private void message(AprsAX25 ax25, String info) {
+	private void message(String info) {
 		message_type = "Message";
 
 		message m = new message(info);
@@ -934,7 +933,7 @@ public class AprsAprs {
 		comment = null;
 	}
 
-	private void object(AprsAX25 ax25, String info) {
+	private void object(String info) {
 
 		message_type = "Object";
 
@@ -1036,52 +1035,52 @@ public class AprsAprs {
 			case type_position:
 			case type_position_msg:
 				if (info.startsWith("!!"))
-					ultimeter(ax25, info);
+					ultimeter(info);
 				else
-					ll_pos(ax25, info);
+					ll_pos(info);
 				break;
 
 			case type_raw_gps:
 				if (info.startsWith("$ULTW"))
-					ultimeter(ax25, info);
+					ultimeter(info);
 				else
-					raw_nmea(ax25, info);
+					raw_nmea(info);
 				break;
 
 			case type_mic_e:
 			case type_old_mic_e_rev_0:
 			case type_old_mic_e:
 			case type_current_mic_e:
-				mic_e(ax25, info);
+				mic_e(info);
 				break;
 
 			case type_position_time:
 			case type_position_time_msg:
-				ll_pos_time(ax25, info);
+				ll_pos_time(info);
 				break;
 
 			case type_station_cap:
-				station_cap(ax25, info);
+				station_cap(info);
 				break;
 
 			case type_status:
-				status(ax25, info);
+				status(info);
 				break;
 
 			case type_weather:
-				weather(ax25, info);
+				weather(info);
 				break;
 
 			case type_third_party:
-				third_party(ax25, info);
+				third_party(info);
 				break;
 
 			case type_message:
-				message(ax25, info);
+				message(info);
 				break;
 
 			case type_object:
-				object(ax25, info);
+				object(info);
 				break;
 			default:
 				message_type = String.format("Unknown message type '%c'", dti);
