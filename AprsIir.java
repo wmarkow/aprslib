@@ -16,97 +16,55 @@ package org.altusmetrum.aprslib_1;
 
 public class AprsIir {
 
-	class biquad {
-		final float	b0, b1, b2, a1, a2;
-
-		float		w1, w2;
-
-		float filter(float x0) {
-			float	accumulator;
-			float	w0;
-
-			/* Run feedback part of filter */
-			accumulator  = w2 * a2;
-			accumulator += w1 * a1;
-			accumulator += x0 ;
-
-			w0 = accumulator;
-
-			/* Run feedforward part of filter */
-			accumulator  = w0 * b0;
-			accumulator += w1 * b1;
-			accumulator += w2 * b2;
-
-			w2 = w1;		// Shuffle history buffer
-			w1 = w0;
-
-			return accumulator;
-		}
-
-		void reset() {
-			w1 = w2 = 0;
-		}
-
-		biquad(float b0, float b1, float b2, float a1, float a2) {
-			this.b0 = b0;
-			this.b1 = b1;
-			this.b2 = b2;
-			this.a1 = a1;
-			this.a2 = a2;
-		}
-	}
-
-	biquad[]	biquads;
-
-	static final float[]	band_coeff = {
-		/* Scaled for floating point */
-		0.5467085797931144f, -1.0934171595862288f, 0.5467085797931144f, 1.8995374900575972f, -0.9314401473000165f,	// b0, b1, b2, a1, a2
-		0.5f, -1f, 0.5f, 1.9595060786696943f, -0.9791438846133993f,							// b0, b1, b2, a1, a2
-		0.015625f, 0.03125f, 0.015625f, 1.8330685107526572f, -0.901131762971006f,					// b0, b1, b2, a1, a2
-		0.0078125f, 0.015625f, 0.0078125f, 1.8352188343679972f, -0.9504662614217543f					// b0, b1, b2, a1, a2
+	static final float[] numerator =
+	{
+		-0.00090056609798273412f, /* z^{0} */
+		-2.5480311925112531e-19f, /* z^{-1} */
+		0.0045028304899136697f, /* z^{-2} */
+		-2.0384249540090025e-18f, /* z^{-3} */
+		-0.0090056609798273429f, /* z^{-4} */
+		-0f, /* z^{-5} */
+		0.0090056609798273429f, /* z^{-6} */
+		2.0384249540090025e-18f, /* z^{-7} */
+		-0.0045028304899136697f, /* z^{-8} */
+		2.5480311925112531e-19f, /* z^{-9} */
+		0.00090056609798273412f, /* z^{-10} */
 	};
 
-	static final float[]	lp_coeff = {
-		0.026736387616333877f, 0.05347277523266775f, 0.026736387616333877f, 1.502704181197029f, -0.5830614019773526f,// b0, b1, b2, a1, a2
-		0.03125f, 0.0625f, 0.03125f, 1.639887396470299f, -0.8070827730925009f// b0, b1, b2, a1, a2
+
+	static final float[] denominator =
+	{
+		1f, /* z^{0} */
+		-11.398985386103741f, /* z^{-1} */
+		58.865824337335113f, /* z^{-2} */
+		-181.32624283693013f, /* z^{-3} */
+		368.8806530885679f, /* z^{-4} */
+		-517.74114004270632f, /* z^{-5} */
+		507.59686688571645f, /* z^{-6} */
+		-343.14427481657441f, /* z^{-7} */
+		153.02490888106149f, /* z^{-8} */
+		-40.634715516555147f, /* z^{-9} */
+		4.8771057116521135f, /* z^{-10} */
 	};
+
+	AprsRing	input;
+	AprsRing	output;
 
 	float filter(float a) {
-		for (int i = 0; i < biquads.length; i++)
-			a = biquads[i].filter(a);
-		return a;
-	}
+		input.put(a);
 
-	static final int	filter_bandpass = 1;
-	static final int	filter_lowpass = 2;
+		float v = 0;
+		for (int i = 0; i < 11; i++)
+			v -= input.get(i) * denominator[i];
 
-	AprsIir(int type) {
-		float[]	coeff;
-
-		switch (type) {
-		case filter_bandpass:
-		default:
-			coeff = band_coeff;
-			break;
-		case filter_lowpass:
-			coeff = lp_coeff;
-			break;
-		}
-
-		int	nb = coeff.length / 5;
-
-		biquads = new biquad[nb];
-		for (int i = 0; i < nb; i++) {
-			int	o = i * 5;
-			biquads[i] = new biquad(coeff[o+0],
-						coeff[o+1],
-						coeff[o+2],
-						coeff[o+3],
-						coeff[o+4]);
-		}
+		for (int i = 0; i < 10; i++)
+			v += output.get(i) * numerator[i+1];
+		output.put(v);
+		return v;
 	}
 
 	AprsIir() {
-		this(filter_bandpass);
+		input = new AprsRing(11);
+		output = new AprsRing(11);
 	}
 }

@@ -41,11 +41,13 @@ public class AprsDemod {
 	 * accuracy while increasing the cost of the computation.
 	 */
 
+	boolean preiir;			/* Enable iir prefilter */
 	boolean prefilter;		/* Enable bandpass prefilter */
 	boolean	convolution;		/* Select convolution detector instead of Goertzel */
 	boolean lowfilter;		/* Enable lowpass postfilter */
 
-	static final boolean default_prefilter = true;
+	static final boolean default_preiir = true;
+	static final boolean default_prefilter = false;
 	static final boolean default_convolution = false;
 	static final boolean default_lowfilter = true;
 
@@ -53,6 +55,7 @@ public class AprsDemod {
 	 * than the detectors and hence filter out noise
 	 * better
 	 */
+	AprsIir		pre_iir;
 	AprsFilter	pre_filter;
 	AprsRing	pre_ring;
 
@@ -113,6 +116,9 @@ public class AprsDemod {
 		if (prefilter) {
 			pre_ring.put(input);
 			input = pre_filter.convolve(pre_ring);
+		}
+		if (preiir) {
+			input = pre_iir.filter(input);
 		}
 
 		input_ring.put(input);
@@ -176,7 +182,8 @@ public class AprsDemod {
 			demod(0.0f);
 	}
 
-	public AprsDemod(AprsData data, float sample_rate, boolean prefilter, boolean convolution, boolean lowfilter) {
+	public AprsDemod(AprsData data, float sample_rate, boolean prefilter, boolean convolution, boolean lowfilter, boolean preiir) {
+		this.preiir = preiir;
 		this.prefilter = prefilter;
 		this.convolution = convolution;
 		this.lowfilter = lowfilter;
@@ -250,11 +257,11 @@ public class AprsDemod {
 	}
 
 	public AprsDemod(AprsData data, float sample_rate) {
-		this(data, sample_rate, default_prefilter, default_convolution, default_lowfilter);
+		this(data, sample_rate, default_prefilter, default_convolution, default_lowfilter, default_preiir);
 	}
 
-	public AprsDemod(AprsPacket packet, float sample_rate, boolean prefilter, boolean convolution, boolean lowfilter) {
-		this(new AprsAX25(packet), sample_rate, prefilter, convolution, lowfilter);
+	public AprsDemod(AprsPacket packet, float sample_rate, boolean prefilter, boolean convolution, boolean lowfilter, boolean preiir) {
+		this(new AprsAX25(packet), sample_rate, prefilter, convolution, lowfilter, preiir);
 	}
 
 	public AprsDemod(AprsPacket packet, float sample_rate) {
