@@ -46,8 +46,8 @@ public class AprsDemod {
 	boolean	convolution;		/* Select convolution detector instead of Goertzel */
 	boolean lowfilter;		/* Enable lowpass postfilter */
 
-	static final boolean default_preiir = true;
-	static final boolean default_prefilter = false;
+	static final boolean default_preiir = false;
+	static final boolean default_prefilter = true;
 	static final boolean default_convolution = false;
 	static final boolean default_lowfilter = true;
 

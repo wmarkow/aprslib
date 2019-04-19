@@ -29,7 +29,7 @@ public class AprsTest {
 
 	class packet implements AprsPacket {
 		public void receive(AprsAprs packet) {
-//			System.out.printf("baud %7.2f clock %5.2f ", demod.baud_rate(), demod.pll.pll_off());
+			System.out.printf("baud %7.2f clock %5.2f ", demod.baud_rate(), demod.pll.pll_off());
 			System.out.printf("%s\n", packet.toString());
 		}
 
@@ -168,9 +168,9 @@ public class AprsTest {
 
 		demod = new AprsDemod(p, 44100);
 
-		test_iir(new AprsIir());
+//		test_iir(new AprsIir());
 //		test_filter(demod.pre_filter, 30000);
-		System.exit(0);
+//		System.exit(0);
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equals("capture")) {
