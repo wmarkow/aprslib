@@ -1,5 +1,14 @@
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache/
+config.log
+config.status
+configure
+install-sh
+missing
 Manifest.txt
-aprslib_*.jar
 aprstest
+*.jar
 bin
-*.stamp
+classaprslib.stamp
