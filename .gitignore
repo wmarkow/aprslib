@@ -12,3 +12,4 @@ aprstest
 *.jar
 bin
 classaprslib.stamp
+target
