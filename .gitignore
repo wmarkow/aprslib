@@ -13,3 +13,6 @@ aprstest
 bin
 classaprslib.stamp
 target
+.classpath
+.project
+.settings/
