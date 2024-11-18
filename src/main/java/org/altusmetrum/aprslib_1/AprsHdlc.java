@@ -44,6 +44,7 @@ public class AprsHdlc implements AprsBit {
 			bit = 0;
 		}
 
+		System.out.print(bit);
 		/* Run two raw bit-level pattern detectors */
 
 		frame_pattern >>= 1;
@@ -72,16 +73,16 @@ public class AprsHdlc implements AprsBit {
 
 		/* When we see the framing pattern, start decoding bytes */
 		if (frame_pattern == 0x7e) {
-			System.out.println("Flag decoded");
+			System.out.println(" Flag decoded");
 			data.start();
 			octet_len = 0;
 		} else if (frame_pattern == 0xfe) {
-			System.out.println("0xFE decoded");
+			System.out.println(" 0xFE decoded");
 			data.stop();
 			octet_len = -1;
 		} else if ((frame_pattern & 0xfc) == 0x7c) {
 			/* Bit stuffing, drop the following zero */
-			System.out.println("Bit stuffing detected");
+			System.out.println(" Bit stuffing detected");
 			;
 		} else 	if (octet_len >= 0) {
 			octet >>= 1;
@@ -92,7 +93,7 @@ public class AprsHdlc implements AprsBit {
 				octet_len = 0;
 				data.data((byte) octet);
 				
-				System.out.println(String.format("Decoded byte: %s", octet));
+				System.out.println(String.format(" Decoded byte: %s", octet));
 			}
 		}
 	}
